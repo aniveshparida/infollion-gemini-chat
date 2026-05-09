@@ -106,7 +106,7 @@ function App() {
   };
 
   // The custom hook handles the heavy lifting for the API connection and locking.
-  const { handleSendMessage, handleStopGenerating, loadingStates, isProcessing } = useChatStream(
+  const { handleSendMessage, handleStopGenerating, loadingStates } = useChatStream(
     chats,
     activeChatId,
     updateChatMessages,
