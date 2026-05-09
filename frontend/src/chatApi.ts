@@ -2,7 +2,15 @@ import axios from 'axios';
 
 const API_URL = 'https://infollion-gemini-chat2.onrender.com/api';
 
-export const sendMessage = async (chatId: string, message: string, history: any[], document?: File | null, image?: File | null, signal?: AbortSignal) => {
+export const sendMessageStream = async (
+    chatId: string, 
+    message: string, 
+    history: any[], 
+    document: File | null | undefined, 
+    image: File | null | undefined, 
+    signal: AbortSignal | undefined, 
+    onChunk: (chunk: string) => void
+) => {
     const formData = new FormData();
     formData.append('chatId', chatId);
     formData.append('message', message);
@@ -14,13 +22,30 @@ export const sendMessage = async (chatId: string, message: string, history: any[
         formData.append('image', image);
     }
 
-    const response = await axios.post(`${API_URL}/chat`, formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data',
-        },
+    const response = await fetch(`${API_URL}/chat`, {
+        method: 'POST',
+        body: formData,
         signal,
     });
-    return response.data;
+
+    if (!response.ok) {
+        throw new Error('Failed to reach server');
+    }
+    if (!response.body) {
+        throw new Error('No response body');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunkText = decoder.decode(value, { stream: true });
+        if (chunkText) {
+            onChunk(chunkText);
+        }
+    }
 };
 
 export const deleteChat = async (chatId: string) => {

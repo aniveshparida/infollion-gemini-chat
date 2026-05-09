@@ -5,7 +5,7 @@ import {
   SquarePen, ChevronDown, Paperclip, ArrowUp
 } from 'lucide-react';
 import { type ChatSession, type Message } from './types';
-import { sendMessage, deleteChat } from './chatApi';
+import { sendMessageStream, deleteChat } from './chatApi';
 import MarkdownRenderer from './components/MarkdownRender';
 
 function App() {
@@ -185,29 +185,52 @@ function App() {
     const abortController = new AbortController();
     abortControllersRef.current[currentChatId] = abortController;
 
+    const botMessageId = crypto.randomUUID();
+    const initialBotMessage: Message = {
+      id: botMessageId,
+      role: 'model',
+      text: '',
+    };
+    updateChatMessages(currentChatId, initialBotMessage);
+
     try {
-      const data = await sendMessage(currentChatId, messageToSend, historyToSend, docToSend, imgToSend, abortController.signal);
-      const botMessage: Message = {
-        id: crypto.randomUUID(),
-        role: 'model',
-        text: data.response,
-      };
-      updateChatMessages(currentChatId, botMessage);
+      await sendMessageStream(
+        currentChatId, 
+        messageToSend, 
+        historyToSend, 
+        docToSend, 
+        imgToSend, 
+        abortController.signal,
+        (chunkText) => {
+          appendChunkToMessage(currentChatId, botMessageId, chunkText);
+        }
+      );
     } catch (error: any) {
-      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
+      if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
         console.log(`Request aborted for chat ${currentChatId}`);
       } else {
         console.error('Failed to send message:', error);
-        updateChatMessages(currentChatId, {
-          id: crypto.randomUUID(),
-          role: 'model',
-          text: 'Error: Could not reach the server.',
-        });
+        appendChunkToMessage(currentChatId, botMessageId, '\n\n**Error: Could not reach the server or generation failed.**');
       }
     } finally {
       setLoadingStates(prev => ({ ...prev, [currentChatId]: false }));
       delete abortControllersRef.current[currentChatId];
     }
+  };
+
+  const appendChunkToMessage = (chatId: string, messageId: string, chunk: string) => {
+    setChats(prevChats => 
+      prevChats.map(chat => 
+        chat.id === chatId 
+          ? { 
+              ...chat, 
+              messages: chat.messages.map(msg => 
+                msg.id === messageId ? { ...msg, text: msg.text + chunk } : msg
+              )
+            } 
+          : chat
+      )
+    );
   };
 
   const updateChatMessages = (chatId: string, newMessage: Message, newTitle?: string) => {

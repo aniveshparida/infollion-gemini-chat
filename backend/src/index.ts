@@ -88,9 +88,17 @@ app.post('/api/chat',upload.fields([{name:'document',maxCount:1},{name:'image',m
         }
         history.push({role:"user",parts:userParts});
 
-        const result = await model.generateContent({contents:history});
-        const botResponse = result.response.text();
-        return res.json({response:botResponse});
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        const result = await model.generateContentStream({contents:history});
+        
+        for await (const chunk of result.stream) {
+            const chunkText = chunk.text();
+            res.write(chunkText);
+        }
+        res.end();
     }
     catch(error)
     {
