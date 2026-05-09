@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL= 'http://localhost:3001/api';
+const API_URL= 'https://infollion-gemini-chat2.onrender.com/api';
 
 export const sendMessage = async(chatId:string,message:string,document?:File|null,image?:File|null,signal?:AbortSignal)=>{
    const formData= new FormData();
