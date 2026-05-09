@@ -92,18 +92,50 @@ app.post('/api/chat',upload.fields([{name:'document',maxCount:1},{name:'image',m
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        const result = await model.generateContentStream({contents:history});
-        
-        for await (const chunk of result.stream) {
-            const chunkText = chunk.text();
-            res.write(chunkText);
+        const maxRetries = 3;
+        let attempt = 0;
+        let success = false;
+        let lastError = null;
+
+        while (attempt <= maxRetries && !success) {
+            try {
+                const result = await model.generateContentStream({contents:history});
+                
+                for await (const chunk of result.stream) {
+                    const chunkText = chunk.text();
+                    res.write(chunkText);
+                }
+                success = true;
+            } catch (error: any) {
+                lastError = error;
+                const is429 = error?.status === 429 || error?.message?.includes('429');
+                
+                if (is429 && attempt < maxRetries) {
+                    attempt++;
+                    const delayMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+                    console.log(`429 Error from Gemini. Retrying in ${delayMs}ms (Attempt ${attempt}/${maxRetries})...`);
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                } else {
+                    throw error;
+                }
+            }
         }
+
+        if (!success) {
+            throw lastError;
+        }
+
         res.end();
     }
     catch(error)
     {
        console.error("Error processing chat:",error);
-       return res.status(500).json({error:"An error occured while processing your request"});
+       if (!res.headersSent) {
+           return res.status(500).json({error:"An error occured while processing your request"});
+       } else {
+           res.write('\n\n**Error: Generation failed or timed out.**');
+           return res.end();
+       }
     }
 });
 app.post('/api/chat/reset',(req:any,res:any)=>{
