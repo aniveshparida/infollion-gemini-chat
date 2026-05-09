@@ -21,13 +21,14 @@ function App() {
   const [selectedDoc, setSelectedDoc] = useState<File | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
+  const isCurrentChatLoading = activeChatId ? loadingStates[activeChatId] : false;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const initialized = useRef(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const abortControllersRef = useRef<Record<string, AbortController>>({});
 
   useEffect(() => {
     localStorage.setItem('chats', JSON.stringify(chats));
@@ -110,9 +111,10 @@ function App() {
   };
 
   const handleStopGenerating = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setIsLoading(false);
+    if (activeChatId && abortControllersRef.current[activeChatId]) {
+      abortControllersRef.current[activeChatId].abort();
+      setLoadingStates(prev => ({ ...prev, [activeChatId]: false }));
+      delete abortControllersRef.current[activeChatId];
     }
   };
 
@@ -153,7 +155,8 @@ function App() {
     if (!inputText.trim() && !selectedDoc && !selectedImage) return;
     if (!activeChatId) return;
 
-    const currentChat = chats.find(c => c.id === activeChatId);
+    const currentChatId = activeChatId; // Capture for the closure
+    const currentChat = chats.find(c => c.id === currentChatId);
     if (!currentChat) return;
 
     const isFirstMessage = currentChat.messages.length === 0;
@@ -169,7 +172,7 @@ function App() {
       imageName: selectedImage?.name,
     };
 
-    updateChatMessages(activeChatId, userMessage, generatedTitle);
+    updateChatMessages(currentChatId, userMessage, generatedTitle);
     
     const messageToSend = inputText;
     const docToSend = selectedDoc;
@@ -177,32 +180,33 @@ function App() {
     const historyToSend = currentChat.messages; // pass existing messages
     
     clearInputs();
-    setIsLoading(true);
+    setLoadingStates(prev => ({ ...prev, [currentChatId]: true }));
 
-    abortControllerRef.current = new AbortController();
+    const abortController = new AbortController();
+    abortControllersRef.current[currentChatId] = abortController;
 
     try {
-      const data = await sendMessage(activeChatId, messageToSend, historyToSend, docToSend, imgToSend, abortControllerRef.current.signal);
+      const data = await sendMessage(currentChatId, messageToSend, historyToSend, docToSend, imgToSend, abortController.signal);
       const botMessage: Message = {
         id: crypto.randomUUID(),
         role: 'model',
         text: data.response,
       };
-      updateChatMessages(activeChatId, botMessage);
+      updateChatMessages(currentChatId, botMessage);
     } catch (error: any) {
       if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
-        console.log('Request aborted by user');
+        console.log(`Request aborted for chat ${currentChatId}`);
       } else {
         console.error('Failed to send message:', error);
-        updateChatMessages(activeChatId, {
+        updateChatMessages(currentChatId, {
           id: crypto.randomUUID(),
           role: 'model',
           text: 'Error: Could not reach the server.',
         });
       }
     } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
+      setLoadingStates(prev => ({ ...prev, [currentChatId]: false }));
+      delete abortControllersRef.current[currentChatId];
     }
   };
 
@@ -261,7 +265,12 @@ function App() {
                     activeChatId === chat.id ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800'
                   }`}
                 >
-                  <span className="truncate">{chat.title}</span>
+                  <div className="flex items-center gap-2 truncate overflow-hidden flex-1">
+                    <span className="truncate">{chat.title}</span>
+                    {loadingStates[chat.id] && (
+                      <Loader2 size={12} className="animate-spin text-zinc-400 shrink-0" />
+                    )}
+                  </div>
                   <button 
                     onClick={(e) => handleDeleteChat(e, chat.id)}
                     className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition ml-2 shrink-0"
@@ -351,7 +360,7 @@ function App() {
                         {msg.documentName && (
                           <span className="text-xs flex items-center gap-1.5 bg-zinc-800 px-2.5 py-1.5 rounded-md text-zinc-300">
                             <FileText size={12} /> {msg.documentName}
-                            {isLoading && index === activeChat.messages.length - 1 && (
+                            {isCurrentChatLoading && index === activeChat.messages.length - 1 && (
                                <Loader2 size={12} className="animate-spin text-zinc-400 ml-0.5" />
                             )}
                           </span>
@@ -359,7 +368,7 @@ function App() {
                         {msg.imageName && (
                           <span className="text-xs flex items-center gap-1.5 bg-zinc-800 px-2.5 py-1.5 rounded-md text-zinc-300">
                             <ImageIcon size={12} /> {msg.imageName}
-                            {isLoading && index === activeChat.messages.length - 1 && (
+                            {isCurrentChatLoading && index === activeChat.messages.length - 1 && (
                                <Loader2 size={12} className="animate-spin text-zinc-400 ml-0.5" />
                             )}
                           </span>
@@ -385,7 +394,7 @@ function App() {
                 </div>
               ))}
               
-              {isLoading && (
+              {isCurrentChatLoading && (
                 <div className="flex w-full justify-start gap-4">
                   <div className="w-8 h-8 rounded-full border border-zinc-700 flex items-center justify-center shrink-0 bg-zinc-950 mt-1">
                     <Bot size={16} className="text-zinc-100" />
@@ -435,7 +444,7 @@ function App() {
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="Message Gemini..."
                 className="bg-transparent border-none outline-none text-zinc-100 px-3 py-3 w-full placeholder:text-zinc-400 text-[15px]"
-                disabled={isLoading}
+                disabled={isCurrentChatLoading}
               />
 
               {/* Bottom Row: Controls */}
@@ -463,7 +472,7 @@ function App() {
                   </button>
                 </div>
 
-                {isLoading ? (
+                {isCurrentChatLoading ? (
                   <button 
                     type="button" 
                     onClick={handleStopGenerating}
