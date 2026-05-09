@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Image as ImageIcon, 
   FileText, Loader2, User, Bot, X, Trash2, StopCircle,
-  SquarePen, ChevronDown, Paperclip, ArrowUp
+  SquarePen, ChevronDown, Paperclip, ArrowUp,
+  Copy, Check, RotateCcw
 } from 'lucide-react';
 import { type ChatSession, type Message } from './types';
 import { sendMessageStream, deleteChat } from './chatApi';
@@ -22,6 +23,7 @@ function App() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const isCurrentChatLoading = activeChatId ? loadingStates[activeChatId] : false;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -100,15 +102,7 @@ function App() {
     }
   };
 
-  const handleClearCurrentChat = async () => {
-    if (!activeChatId) return;
-    try {
-      await deleteChat(activeChatId);
-      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, messages: [] } : c));
-    } catch (err) {
-      console.error("Failed to clear chat", err);
-    }
-  };
+
 
   const handleStopGenerating = () => {
     if (activeChatId && abortControllersRef.current[activeChatId]) {
@@ -150,9 +144,16 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim() && !selectedDoc && !selectedImage) return;
+  const handleCopy = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleSendMessage = async (e?: React.FormEvent, overrideText?: string) => {
+    if (e) e.preventDefault();
+    const textToSend = overrideText !== undefined ? overrideText : inputText;
+    if (!textToSend.trim() && !selectedDoc && !selectedImage) return;
     if (!activeChatId || loadingStates[activeChatId]) return;
 
     const currentChatId = activeChatId; // Capture for the closure
@@ -160,21 +161,21 @@ function App() {
     if (!currentChat) return;
 
     const isFirstMessage = currentChat.messages.length === 0;
-    const generatedTitle = isFirstMessage && inputText.trim()
-      ? inputText.trim().split(' ').slice(0, 4).join(' ') + (inputText.trim().split(' ').length > 4 ? '...' : '')
+    const generatedTitle = isFirstMessage && textToSend.trim()
+      ? textToSend.trim().split(' ').slice(0, 4).join(' ') + (textToSend.trim().split(' ').length > 4 ? '...' : '')
       : currentChat.title;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
-      text: inputText,
+      text: textToSend,
       documentName: selectedDoc?.name,
       imageName: selectedImage?.name,
     };
 
     updateChatMessages(currentChatId, userMessage, generatedTitle);
     
-    const messageToSend = inputText;
+    const messageToSend = textToSend;
     const docToSend = selectedDoc;
     const imgToSend = selectedImage;
     const historyToSend = currentChat.messages.slice(-10); // Truncate history to save tokens
@@ -332,12 +333,6 @@ function App() {
              </button>
           </div>
           <div className="flex items-center gap-2 ml-auto">
-             {activeChat?.messages.length ? (
-               <button onClick={handleClearCurrentChat} className="text-zinc-400 hover:text-red-400 p-2 rounded-md transition" title="Clear Chat">
-                  <Trash2 size={18} />
-               </button>
-             ) : null}
-
           </div>
         </header>
 
@@ -367,7 +362,7 @@ function App() {
           ) : (
             <div className="flex flex-col gap-6 max-w-3xl mx-auto w-full pt-8">
               {activeChat?.messages.map((msg, index) => (
-                <div key={msg.id} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start gap-4'}`}>
+                <div key={msg.id} className={`flex w-full group ${msg.role === 'user' ? 'justify-end' : 'justify-start gap-4'}`}>
                   
                   {msg.role === 'model' && (
                      <div className="w-8 h-8 rounded-full border border-zinc-700 flex items-center justify-center shrink-0 bg-zinc-950 mt-1">
@@ -400,33 +395,36 @@ function App() {
                     )}
                     
                     {/* Message Bubble */}
-                    {msg.text && (
+                    {msg.text || (msg.role === 'model' && isCurrentChatLoading && index === activeChat.messages.length - 1) ? (
                       <div className={`leading-relaxed w-full ${
                         msg.role === 'user' 
                           ? 'bg-zinc-800 rounded-3xl px-5 py-2.5 text-zinc-100 whitespace-pre-wrap' 
                           : 'bg-transparent text-zinc-200 py-1 overflow-x-auto'
                       }`}>
                         {msg.role === 'model' ? (
-                          <MarkdownRenderer content={msg.text} />
+                          msg.text ? <MarkdownRenderer content={msg.text} /> : <Loader2 className="animate-spin text-zinc-500 mt-1" size={16} />
                         ) : (
                           msg.text
                         )}
+                      </div>
+                    ) : null}
+
+                    {/* Actions (User Messages) */}
+                    {msg.role === 'user' && (
+                      <div className="flex items-center gap-2 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity mr-2">
+                        <button onClick={() => handleCopy(msg.id, msg.text)} className="text-zinc-500 hover:text-zinc-300 transition-colors p-1" title="Copy">
+                          {copiedId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                        </button>
+                        <button onClick={() => handleSendMessage(undefined, msg.text)} className="text-zinc-500 hover:text-zinc-300 transition-colors p-1" title="Resend">
+                          <RotateCcw size={14} />
+                        </button>
                       </div>
                     )}
                   </div>
                 </div>
               ))}
               
-              {isCurrentChatLoading && (
-                <div className="flex w-full justify-start gap-4">
-                  <div className="w-8 h-8 rounded-full border border-zinc-700 flex items-center justify-center shrink-0 bg-zinc-950 mt-1">
-                    <Bot size={16} className="text-zinc-100" />
-                  </div>
-                  <div className="text-zinc-400 py-2 flex items-center gap-2">
-                    <Loader2 className="animate-spin" size={16} />
-                  </div>
-                </div>
-              )}
+
               <div ref={messagesEndRef} className="h-4" />
             </div>
           )}
@@ -515,9 +513,6 @@ function App() {
                 )}
               </div>
             </form>
-            <div className="text-center mt-3 text-[11px] text-zinc-500">
-              Gemini can make mistakes. Check important info.
-            </div>
           </div>
         </div>
       </div>
