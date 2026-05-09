@@ -22,6 +22,9 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
 
 const chatSessions = new Map<string,any[]>();
 
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
 const upload =multer({
     storage: multer.memoryStorage(),
     limits:{fileSize: 10*1024*1024}
@@ -62,7 +65,7 @@ app.post('/api/chat',upload.fields([{name:'document',maxCount:1},{name:'image',m
             userParts.push({
                 inlineData:{
                     data:image.buffer.toString("base64"),
-                    mimetype: image.mimetype
+                    mimeType: image.mimetype
                 }
             });
         }
