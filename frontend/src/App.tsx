@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { type ChatSession, type Message } from './types';
 import { sendMessage, deleteChat } from './chatApi';
+import MarkdownRenderer from './components/MarkdownRender';
 
 function App() {
   const [chats, setChats] = useState<ChatSession[]>([]);
@@ -325,12 +326,16 @@ function App() {
                     
                     {/* Message Bubble */}
                     {msg.text && (
-                      <div className={`whitespace-pre-wrap leading-relaxed ${
+                      <div className={`leading-relaxed w-full ${
                         msg.role === 'user' 
-                          ? 'bg-zinc-800 rounded-3xl px-5 py-2.5 text-zinc-100' 
-                          : 'bg-transparent text-zinc-200 py-1'
+                          ? 'bg-zinc-800 rounded-3xl px-5 py-2.5 text-zinc-100 whitespace-pre-wrap' 
+                          : 'bg-transparent text-zinc-200 py-1 overflow-x-auto'
                       }`}>
-                        {msg.text}
+                        {msg.role === 'model' ? (
+                          <MarkdownRenderer content={msg.text} />
+                        ) : (
+                          msg.text
+                        )}
                       </div>
                     )}
                   </div>
