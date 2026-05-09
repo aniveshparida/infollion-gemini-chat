@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // Use local backend for development
-const API_URL = 'http://localhost:3001/api';
-// const API_URL = 'https://infollion-gemini-chat2.onrender.com/api';
+// const API_URL = 'http://localhost:3001/api';
+const API_URL = 'https://infollion-gemini-chat2.onrender.com/api';
 
 export const sendMessageStream = async (
     chatId: string, 
