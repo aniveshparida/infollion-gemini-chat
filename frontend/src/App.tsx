@@ -42,12 +42,17 @@ function App() {
   }, [activeChatId]);
 
   useEffect(() => {
+    if (!selectedImage) {
+      setImagePreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(selectedImage);
+    setImagePreviewUrl(url);
+
     return () => {
-      if (imagePreviewUrl) {
-        URL.revokeObjectURL(imagePreviewUrl);
-      }
+      URL.revokeObjectURL(url);
     };
-  }, [imagePreviewUrl]);
+  }, [selectedImage]);
 
   // Auto-scroll to bottom of messages
   const scrollToBottom = () => {
@@ -124,8 +129,6 @@ function App() {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedImage(file);
-      const url = URL.createObjectURL(file);
-      setImagePreviewUrl(url);
     }
   };
 
@@ -410,9 +413,9 @@ function App() {
                   )}
                   {selectedImage && imagePreviewUrl && (
                     <div className="relative group">
-                      <img src={imagePreviewUrl} alt="Preview" className="h-12 w-12 object-cover rounded-xl border border-zinc-600" />
-                      <button type="button" onClick={() => removeAttachment('image')} className="absolute -top-1.5 -right-1.5 bg-zinc-600 hover:bg-zinc-500 text-zinc-100 rounded-full p-0.5 shadow-sm transition opacity-0 group-hover:opacity-100">
-                        <X size={12} />
+                      <img src={imagePreviewUrl} alt="Preview" className="h-20 w-20 object-cover rounded-xl border border-zinc-600" />
+                      <button type="button" onClick={() => removeAttachment('image')} className="absolute -top-2 -right-2 bg-zinc-600 hover:bg-zinc-500 text-zinc-100 rounded-full p-1 shadow-sm transition opacity-0 group-hover:opacity-100">
+                        <X size={14} />
                       </button>
                     </div>
                   )}
