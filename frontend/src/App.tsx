@@ -399,7 +399,7 @@ function App() {
                       <div className={`leading-relaxed w-full ${
                         msg.role === 'user' 
                           ? 'bg-zinc-800 rounded-3xl px-5 py-2.5 text-zinc-100 whitespace-pre-wrap' 
-                          : 'bg-transparent text-zinc-200 py-1 overflow-x-auto'
+                          : 'bg-transparent text-zinc-200 py-1'
                       }`}>
                         {msg.role === 'model' ? (
                           msg.text ? <MarkdownRenderer content={msg.text} /> : <Loader2 className="animate-spin text-zinc-500 mt-1" size={16} />
