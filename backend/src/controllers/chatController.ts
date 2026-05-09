@@ -1,18 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { parsePdfBuffer, mapHistoryToGeminiFormat } from '../utils/geminiHelper.js';
 
-// Lazy-init Gemini so the API key is guaranteed to be loaded from env first.
-let _model: any = null;
-const getModel = () => {
-    if (!_model) {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-        _model = genAI.getGenerativeModel({ 
-            model: "gemini-2.0-flash",
-            systemInstruction: "You are a helpful conversational AI assistant. Respond conversationally. Do not output raw JSON bounding boxes unless explicitly instructed to detect objects."
-        });
-    }
-    return _model;
-};
 
 export const handleChatGeneration = async (req: any, res: any) => {
     try {
@@ -22,6 +10,13 @@ export const handleChatGeneration = async (req: any, res: any) => {
             return res.status(400).json({ error: "chatId is required" });
         }
         
+        // Initialize Gemini fresh on each request to ensure latest API key from env
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-flash-latest",
+            systemInstruction: "You are a helpful conversational AI assistant. Respond conversationally. Do not output raw JSON bounding boxes unless explicitly instructed to detect objects."
+        });
+
         const history = mapHistoryToGeminiFormat(historyStr);
 
         // Multer handles the buffer; remember to check mimeType before processing.
@@ -57,36 +52,10 @@ export const handleChatGeneration = async (req: any, res: any) => {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        const maxRetries = 3;
-        let attempt = 0;
-        let success = false;
-        let lastError = null;
-
-        while (attempt <= maxRetries && !success) {
-            try {
-                const result = await getModel().generateContentStream({ contents: history });
-                
-                for await (const chunk of result.stream) {
-                    res.write(chunk.text());
-                }
-                success = true;
-            } catch (error: any) {
-                lastError = error;
-                const is429 = error?.status === 429 || error?.message?.includes('429');
-                
-                if (is429 && attempt < maxRetries) {
-                    attempt++;
-                    const delayMs = Math.pow(2, attempt) * 1000;
-                    console.log(`429 Error from Gemini. Retrying in ${delayMs}ms (Attempt ${attempt}/${maxRetries})...`);
-                    await new Promise(resolve => setTimeout(resolve, delayMs));
-                } else {
-                    throw error;
-                }
-            }
-        }
-
-        if (!success) {
-            throw lastError;
+        const result = await model.generateContentStream({ contents: history });
+        
+        for await (const chunk of result.stream) {
+            res.write(chunk.text());
         }
 
         res.end();
