@@ -334,7 +334,7 @@ function App() {
             </div>
           ) : (
             <div className="flex flex-col gap-6 max-w-3xl mx-auto w-full pt-8">
-              {activeChat?.messages.map((msg) => (
+              {activeChat?.messages.map((msg, index) => (
                 <div key={msg.id} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start gap-4'}`}>
                   
                   {msg.role === 'model' && (
@@ -349,13 +349,19 @@ function App() {
                     {(msg.documentName || msg.imageName) && (
                       <div className="flex gap-2 mb-1">
                         {msg.documentName && (
-                          <span className="text-xs flex items-center gap-1 bg-zinc-800 px-2 py-1 rounded-md text-zinc-300">
+                          <span className="text-xs flex items-center gap-1.5 bg-zinc-800 px-2.5 py-1.5 rounded-md text-zinc-300">
                             <FileText size={12} /> {msg.documentName}
+                            {isLoading && index === activeChat.messages.length - 1 && (
+                               <Loader2 size={12} className="animate-spin text-zinc-400 ml-0.5" />
+                            )}
                           </span>
                         )}
                         {msg.imageName && (
-                          <span className="text-xs flex items-center gap-1 bg-zinc-800 px-2 py-1 rounded-md text-zinc-300">
+                          <span className="text-xs flex items-center gap-1.5 bg-zinc-800 px-2.5 py-1.5 rounded-md text-zinc-300">
                             <ImageIcon size={12} /> {msg.imageName}
+                            {isLoading && index === activeChat.messages.length - 1 && (
+                               <Loader2 size={12} className="animate-spin text-zinc-400 ml-0.5" />
+                            )}
                           </span>
                         )}
                       </div>
