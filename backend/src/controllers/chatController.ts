@@ -13,7 +13,7 @@ export const handleChatGeneration = async (req: any, res: any) => {
         // Initialize Gemini fresh on each request to ensure latest API key from env
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-1.5-flash-latest",
+            model: "gemini-2.0-flash",
             systemInstruction: "You are a helpful conversational AI assistant. Respond conversationally. Do not output raw JSON bounding boxes unless explicitly instructed to detect objects."
         });
 
