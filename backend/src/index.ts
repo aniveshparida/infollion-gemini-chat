@@ -7,7 +7,11 @@ import { PDFParse } from 'pdf-parse';
 
 dotenv.config();
 const app=express();
-app.use(cors());
+app.use(cors({
+  origin: '*', 
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
+}));
 app.use(express.json());
 
 const port = process.env.PORT || 3001;
