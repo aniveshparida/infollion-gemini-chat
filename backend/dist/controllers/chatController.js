@@ -1,19 +1,19 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { parsePdfBuffer, mapHistoryToGeminiFormat } from '../utils/geminiHelper.js';
-// Initialize Gemini — using gemini-2.0-flash for higher free-tier rate limits (1500 RPD vs 20 RPD for 2.5-flash)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || ' ');
-const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    systemInstruction: "You are a helpful conversational AI assistant. Respond conversationally. Do not output raw JSON bounding boxes unless explicitly instructed to detect objects."
-});
 export const handleChatGeneration = async (req, res) => {
     try {
         const { message, chatId, history: historyStr } = req.body;
         if (!chatId) {
             return res.status(400).json({ error: "chatId is required" });
         }
+        // Fresh client per request — guarantees env key is always current after a redeploy
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+        const model = genAI.getGenerativeModel({
+            model: "gemini-1.5-flash",
+            systemInstruction: "You are a helpful conversational AI assistant. Respond conversationally. Do not output raw JSON bounding boxes unless explicitly instructed to detect objects."
+        });
         const history = mapHistoryToGeminiFormat(historyStr);
-        // Multer handles the buffer; remember to check mimeType before processing.
+        // Multer already parsed the multipart payload into buffers for us
         const files = req.files;
         const document = files?.['document']?.[0];
         const image = files?.['image']?.[0];
@@ -30,6 +30,7 @@ export const handleChatGeneration = async (req, res) => {
             promptText = `[Attached Document Content]:\n${docText}\nUser Message:${promptText}`;
         }
         userParts.push({ text: promptText });
+        // Image inline data — mimeType must be camelCase for the Gemini SDK
         if (image) {
             userParts.push({
                 inlineData: {
@@ -39,46 +40,35 @@ export const handleChatGeneration = async (req, res) => {
             });
         }
         history.push({ role: "user", parts: userParts });
-        // Lock connection open for raw Server-Sent Events stream chunking.
+        // Open a streaming connection so the frontend can read chunks in real-time
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
-        const maxRetries = 3;
-        let attempt = 0;
-        let success = false;
-        let lastError = null;
-        while (attempt <= maxRetries && !success) {
-            try {
-                const result = await model.generateContentStream({ contents: history });
-                for await (const chunk of result.stream) {
-                    res.write(chunk.text());
-                }
-                success = true;
-            }
-            catch (error) {
-                lastError = error;
-                const is429 = error?.status === 429 || error?.message?.includes('429');
-                if (is429 && attempt < maxRetries) {
-                    attempt++;
-                    const delayMs = Math.pow(2, attempt) * 1000;
-                    console.log(`429 Error from Gemini. Retrying in ${delayMs}ms (Attempt ${attempt}/${maxRetries})...`);
-                    await new Promise(resolve => setTimeout(resolve, delayMs));
-                }
-                else {
-                    throw error;
-                }
-            }
-        }
-        if (!success) {
-            throw lastError;
+        const result = await model.generateContentStream({ contents: history });
+        for await (const chunk of result.stream) {
+            res.write(chunk.text());
         }
         res.end();
     }
     catch (error) {
-        console.error("Error processing chat:", error);
-        // Critical failsafe: If stream already started, we must close the raw byte stream rather than throwing HTTP statuses.
+        // Detect 429 rate-limit errors from Gemini and send a friendly message instead of crashing
+        const is429 = error?.status === 429 || error?.message?.includes('429');
+        if (is429) {
+            if (!res.headersSent) {
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.setHeader('Cache-Control', 'no-cache');
+                res.setHeader('Connection', 'keep-alive');
+            }
+            res.write('⚠️ Rate Limit Reached: The Gemini Free Tier is busy. Please wait 60 seconds before sending another message.');
+            return res.end();
+        }
+        // Any other error — log it and respond without crashing the process
+        console.error("Chat generation error:", error?.message || error);
         if (!res.headersSent) {
-            return res.status(500).json({ error: "An error occured while processing your request", details: error?.message || String(error) });
+            return res.status(500).json({
+                error: "Generation failed",
+                details: error?.message || String(error)
+            });
         }
         else {
             res.write('\n\n**Error: Generation failed or timed out.**');
@@ -86,8 +76,8 @@ export const handleChatGeneration = async (req, res) => {
         }
     }
 };
-export const handleChatReset = (req, res) => {
-    // Backend is stateless, but frontend expects this endpoint. Kept so clicking 'Delete all' doesn't 404.
+export const handleChatReset = (_req, res) => {
+    // Stateless backend — this endpoint exists so the frontend "delete chat" action doesn't 404
     return res.json({ success: true });
 };
 //# sourceMappingURL=chatController.js.map

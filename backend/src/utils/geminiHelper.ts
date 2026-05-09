@@ -1,20 +1,20 @@
 import { PDFParse } from 'pdf-parse';
 
-// Extracts the raw text layer from PDF buffers.
+// Pull raw text from a PDF buffer so we can feed it to Gemini as context
 export const parsePdfBuffer = async (buffer: Buffer): Promise<string> => {
     const parser = new PDFParse({ data: buffer });
     const pdfData = await parser.getText();
     return pdfData.text;
 };
 
-// Maps our custom history array to the strict {role, parts} format Gemini expects.
-// Sneaky trick: We strip out heavy base64 data from older turns, leaving only a text pointer.
+// Convert our frontend history array into the strict {role, parts} format Gemini expects.
+// We strip heavy base64 data from older turns and leave only a text reference to save tokens.
 export const mapHistoryToGeminiFormat = (historyStr: string) => {
     let parsedHistory: any[] = [];
     try {
         parsedHistory = JSON.parse(historyStr || '[]');
-    } catch (e) {
-        console.error("Failed to parse history JSON string", e);
+    } catch {
+        // Silently fall back to empty history if the JSON is malformed
     }
 
     return parsedHistory.map((msg: any) => {

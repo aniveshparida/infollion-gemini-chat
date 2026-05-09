@@ -1,16 +1,17 @@
 import axios from 'axios';
 
-// Use local backend for development dynamically
-const API_URL = import.meta.env.DEV 
-    ? 'http://localhost:3001/api' 
-    : 'https://infollion-gemini-chat2.onrender.com/api';
+// Dynamically pick backend URL — local dev server vs production Render deploy
+const BASE_URL = import.meta.env.DEV
+    ? 'http://localhost:3001'
+    : 'https://infollion-gemini-chat2.onrender.com';
+
 export const sendMessageStream = async (
-    chatId: string, 
-    message: string, 
-    history: any[], 
-    document: File | null | undefined, 
-    image: File | null | undefined, 
-    signal: AbortSignal | undefined, 
+    chatId: string,
+    message: string,
+    history: any[],
+    document: File | null | undefined,
+    image: File | null | undefined,
+    signal: AbortSignal | undefined,
     onChunk: (chunk: string) => void
 ) => {
     const formData = new FormData();
@@ -24,12 +25,16 @@ export const sendMessageStream = async (
         formData.append('image', image);
     }
 
-    const response = await fetch(`${API_URL}/chat`, {
+    const response = await fetch(`${BASE_URL}/api/chat`, {
         method: 'POST',
         body: formData,
         signal,
     });
 
+    // Catch server errors (500, 502, 503) with a human-readable message
+    if (response.status >= 500) {
+        throw new Error('Server is currently rebooting or hit a limit. Please try again in a moment.');
+    }
     if (!response.ok) {
         throw new Error('Failed to reach server');
     }
@@ -51,6 +56,6 @@ export const sendMessageStream = async (
 };
 
 export const deleteChat = async (chatId: string) => {
-    const response = await axios.post(`${API_URL}/chat/reset`, { chatId });
+    const response = await axios.post(`${BASE_URL}/api/chat/reset`, { chatId });
     return response.data;
 };

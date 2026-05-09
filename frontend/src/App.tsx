@@ -59,7 +59,7 @@ function App() {
 
   useEffect(() => {
     return () => {
-      // Memory cleanup: Prevent memory leaks from lingering object URLs.
+      // Revoke stale object URLs so the browser doesn't leak memory on re-renders
       if (imagePreviewUrl) {
         URL.revokeObjectURL(imagePreviewUrl);
       }
@@ -105,7 +105,7 @@ function App() {
     if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
-  // The custom hook handles the heavy lifting for the API connection and locking.
+  // All streaming logic, abort handling, and per-chat locking lives in this hook
   const { handleSendMessage, handleStopGenerating, loadingStates } = useChatStream(
     chats,
     activeChatId,
@@ -131,7 +131,7 @@ function App() {
 
   const handleDeleteChat = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    // Only block deleting a chat that is currently streaming
+    // Don't let the user nuke a chat while it's mid-stream
     if (loadingStates[id]) return;
     setChats(prev => prev.filter(c => c.id !== id));
     if (activeChatId === id) {
