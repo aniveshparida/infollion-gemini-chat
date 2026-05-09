@@ -9,8 +9,13 @@ import { sendMessage, deleteChat } from './chatApi';
 import MarkdownRenderer from './components/MarkdownRender';
 
 function App() {
-  const [chats, setChats] = useState<ChatSession[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [chats, setChats] = useState<ChatSession[]>(() => {
+    const saved = localStorage.getItem('chats');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [activeChatId, setActiveChatId] = useState<string | null>(() => {
+    return localStorage.getItem('activeChatId');
+  });
   
   const [inputText, setInputText] = useState('');
   const [selectedDoc, setSelectedDoc] = useState<File | null>(null);
@@ -24,9 +29,25 @@ function App() {
   const initialized = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  useEffect(() => {
+    localStorage.setItem('chats', JSON.stringify(chats));
+  }, [chats]);
 
+  useEffect(() => {
+    if (activeChatId) {
+      localStorage.setItem('activeChatId', activeChatId);
+    } else {
+      localStorage.removeItem('activeChatId');
+    }
+  }, [activeChatId]);
 
-
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
 
   // Auto-scroll to bottom of messages
   const scrollToBottom = () => {
@@ -59,15 +80,17 @@ function App() {
   const handleDeleteChat = async (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation();
     try {
+      // Backend does not need to store chats permanently, but we still trigger reset just in case
       await deleteChat(chatId);
-      setChats(prev => prev.filter(c => c.id !== chatId));
-      if (activeChatId === chatId) {
-        const remaining = chats.filter(c => c.id !== chatId);
-        setActiveChatId(remaining.length > 0 ? remaining[0].id : null);
-        if (remaining.length === 0) createNewChat();
-      }
     } catch (err) {
-      console.error("Failed to delete chat", err);
+      console.error("Failed to call delete chat", err);
+    }
+    
+    setChats(prev => prev.filter(c => c.id !== chatId));
+    if (activeChatId === chatId) {
+      const remaining = chats.filter(c => c.id !== chatId);
+      setActiveChatId(remaining.length > 0 ? remaining[0].id : null);
+      if (remaining.length <= 1) createNewChat();
     }
   };
 
@@ -127,6 +150,14 @@ function App() {
     if (!inputText.trim() && !selectedDoc && !selectedImage) return;
     if (!activeChatId) return;
 
+    const currentChat = chats.find(c => c.id === activeChatId);
+    if (!currentChat) return;
+
+    const isFirstMessage = currentChat.messages.length === 0;
+    const generatedTitle = isFirstMessage && inputText.trim()
+      ? inputText.trim().split(' ').slice(0, 4).join(' ') + (inputText.trim().split(' ').length > 4 ? '...' : '')
+      : currentChat.title;
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -135,11 +166,12 @@ function App() {
       imageName: selectedImage?.name,
     };
 
-    updateChatMessages(activeChatId, userMessage);
+    updateChatMessages(activeChatId, userMessage, generatedTitle);
     
     const messageToSend = inputText;
     const docToSend = selectedDoc;
     const imgToSend = selectedImage;
+    const historyToSend = currentChat.messages; // pass existing messages
     
     clearInputs();
     setIsLoading(true);
@@ -147,7 +179,7 @@ function App() {
     abortControllerRef.current = new AbortController();
 
     try {
-      const data = await sendMessage(activeChatId, messageToSend, docToSend, imgToSend, abortControllerRef.current.signal);
+      const data = await sendMessage(activeChatId, messageToSend, historyToSend, docToSend, imgToSend, abortControllerRef.current.signal);
       const botMessage: Message = {
         id: crypto.randomUUID(),
         role: 'model',
@@ -171,10 +203,12 @@ function App() {
     }
   };
 
-  const updateChatMessages = (chatId: string, newMessage: Message) => {
+  const updateChatMessages = (chatId: string, newMessage: Message, newTitle?: string) => {
     setChats(prevChats => 
       prevChats.map(chat => 
-        chat.id === chatId ? { ...chat, messages: [...chat.messages, newMessage] } : chat
+        chat.id === chatId 
+          ? { ...chat, messages: [...chat.messages, newMessage], title: newTitle || chat.title } 
+          : chat
       )
     );
   };

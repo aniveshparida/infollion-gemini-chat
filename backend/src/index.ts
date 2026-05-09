@@ -20,7 +20,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY|| ' ');
 
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
 
-const chatSessions = new Map<string,any[]>();
+
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -32,20 +32,34 @@ const upload =multer({
 
 app.post('/api/chat',upload.fields([{name:'document',maxCount:1},{name:'image',maxCount:1}]),async(req:any,res:any)=>{
     try{
-        const {message,chatId}=req.body;
+        const {message,chatId, history: historyStr}=req.body;
 
         if(!chatId){
             return res.status(400).json({error: "chatId is required"});
         }
+        
+        let parsedHistory: any[] = [];
+        try {
+            parsedHistory = JSON.parse(historyStr || '[]');
+        } catch (e) {
+            console.error("Failed to parse history");
+        }
+
+        const history = parsedHistory.map((msg: any) => {
+            let text = msg.text || '';
+            if (msg.role === 'user') {
+                if (msg.documentName) text = `[Attached Document: ${msg.documentName}]\n${text}`;
+                if (msg.imageName) text = `[Attached Image: ${msg.imageName}]\n${text}`;
+            }
+            return {
+                role: msg.role === 'model' ? 'model' : 'user',
+                parts: [{ text }]
+            };
+        });
+
         const files=req.files as {[fieldname:string]: Express.Multer.File[]};
         const document= files?.['document']?.[0];
         const image= files?.['image']?.[0];
-
-        let history=chatSessions.get(chatId);
-        if(!history){
-            history = [];
-            chatSessions.set(chatId,history);
-        }
         let promptText=message||"";
         const userParts: any[]=[];
         if(document){
@@ -73,8 +87,6 @@ app.post('/api/chat',upload.fields([{name:'document',maxCount:1},{name:'image',m
 
         const result = await model.generateContent({contents:history});
         const botResponse = result.response.text();
-        
-        history.push({role:"model",parts:[{text:botResponse}]});
         return res.json({response:botResponse});
     }
     catch(error)
@@ -85,10 +97,8 @@ app.post('/api/chat',upload.fields([{name:'document',maxCount:1},{name:'image',m
 });
 app.post('/api/chat/reset',(req:any,res:any)=>{
     const {chatId}=req.body;
-    if(chatId)
-    {
-        chatSessions.delete(chatId);
-    }
+    // Deprecated: No longer needed as backend is stateless
+    // but kept so frontend doesn't throw 404 when clicking 'Delete all'
     return res.json({success:true});
 })
 app.listen(port,()=>{

@@ -2,10 +2,11 @@ import axios from 'axios';
 
 const API_URL = 'https://infollion-gemini-chat2.onrender.com/api';
 
-export const sendMessage = async (chatId: string, message: string, document?: File | null, image?: File | null, signal?: AbortSignal) => {
+export const sendMessage = async (chatId: string, message: string, history: any[], document?: File | null, image?: File | null, signal?: AbortSignal) => {
     const formData = new FormData();
     formData.append('chatId', chatId);
     formData.append('message', message);
+    formData.append('history', JSON.stringify(history));
     if (document) {
         formData.append('document', document);
     }
