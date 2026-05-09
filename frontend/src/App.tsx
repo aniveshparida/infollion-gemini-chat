@@ -30,7 +30,8 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const initialized = useRef(false);
-  const abortControllersRef = useRef<Record<string, AbortController>>({});
+  const isProcessing = useRef(false);
+  const globalAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     localStorage.setItem('chats', JSON.stringify(chats));
@@ -105,11 +106,14 @@ function App() {
 
 
   const handleStopGenerating = () => {
-    if (activeChatId && abortControllersRef.current[activeChatId]) {
-      abortControllersRef.current[activeChatId].abort();
-      setLoadingStates(prev => ({ ...prev, [activeChatId]: false }));
-      delete abortControllersRef.current[activeChatId];
+    if (globalAbortControllerRef.current) {
+      globalAbortControllerRef.current.abort();
+      globalAbortControllerRef.current = null;
     }
+    if (activeChatId) {
+      setLoadingStates(prev => ({ ...prev, [activeChatId]: false }));
+    }
+    isProcessing.current = false;
   };
 
   const clearInputs = () => {
@@ -156,9 +160,20 @@ function App() {
     if (!textToSend.trim() && !selectedDoc && !selectedImage) return;
     if (!activeChatId || loadingStates[activeChatId]) return;
 
+    if (isProcessing.current) return;
+    isProcessing.current = true;
+
+    // Immediately cancel any previous ongoing request
+    if (globalAbortControllerRef.current) {
+      globalAbortControllerRef.current.abort();
+    }
+
     const currentChatId = activeChatId; // Capture for the closure
     const currentChat = chats.find(c => c.id === currentChatId);
-    if (!currentChat) return;
+    if (!currentChat) {
+      isProcessing.current = false;
+      return;
+    }
 
     const isFirstMessage = currentChat.messages.length === 0;
     const generatedTitle = isFirstMessage && textToSend.trim()
@@ -184,7 +199,7 @@ function App() {
     setLoadingStates(prev => ({ ...prev, [currentChatId]: true }));
 
     const abortController = new AbortController();
-    abortControllersRef.current[currentChatId] = abortController;
+    globalAbortControllerRef.current = abortController;
 
     const botMessageId = crypto.randomUUID();
     const initialBotMessage: Message = {
@@ -215,7 +230,10 @@ function App() {
       }
     } finally {
       setLoadingStates(prev => ({ ...prev, [currentChatId]: false }));
-      delete abortControllersRef.current[currentChatId];
+      if (globalAbortControllerRef.current === abortController) {
+        globalAbortControllerRef.current = null;
+      }
+      isProcessing.current = false;
     }
   };
 
