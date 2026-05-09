@@ -127,7 +127,7 @@ app.post('/api/chat',upload.fields([{name:'document',maxCount:1},{name:'image',m
 
         res.end();
     }
-    catch(error)
+    catch(error: any)
     {
        console.error("Error processing chat:",error);
        if (!res.headersSent) {
