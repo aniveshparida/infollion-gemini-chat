@@ -131,7 +131,7 @@ app.post('/api/chat',upload.fields([{name:'document',maxCount:1},{name:'image',m
     {
        console.error("Error processing chat:",error);
        if (!res.headersSent) {
-           return res.status(500).json({error:"An error occured while processing your request"});
+           return res.status(500).json({error:"An error occured while processing your request", details: error?.message || String(error)});
        } else {
            res.write('\n\n**Error: Generation failed or timed out.**');
            return res.end();
