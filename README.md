@@ -1,54 +1,74 @@
-﻿# Minimal Gemini Chatbot
- A minimal, focus-driven interface for seamless human-AI collaboration.
+🚀 Minimal AI Chatbot (Groq Optimized)
+A high-performance, focus-driven interface for seamless human-AI collaboration. This application features a modular architecture designed for low-latency streaming and robust request management.
 
-A full-stack, minimal web-based chatbot powered by Google's Gemini API (`gemini-1.5-flash`). This application supports natural text conversation, document extraction (PDF/TXT), image understanding (PNG/JPG), and session-based context management.
+⚠️ Engineering Note: The Pivot to Groq
+Originally designed for Google’s Gemini 1.5 Flash, the core engine was strategically pivoted to Groq (Llama-3.3-70b) during final production.
 
-## 🚀 Features
-- **Multimodal Chat:** Send text, documents, and images in a single thread.
-- **Context Management:** The bot remembers the current conversation history.
-- **Session Reset:** Easily start a fresh chat with zero previous context.
-- **In-Memory Storage:** Fast, lightweight backend requiring no database setup.
-- **Modern UI:** Responsive, dark-mode interface built with Tailwind CSS.
+Reason: Repeated upstream instability with the Gemini API (Status 429/404) on the free tier prevented reliable multimodal processing.
 
-## 🛠️ Tech Stack
-- **Frontend:** React, Vite, TypeScript, Tailwind CSS, Axios, Lucide React.
-- **Backend:** Node.js, Express, TypeScript, Multer (memory storage), `@google/generative-ai`.
+Solution: To guarantee a seamless, high-uptime experience for the reviewer, I migrated the backend to Groq.
 
-## 📦 Installation & Setup
+Outcome: The app now delivers near-instantaneous text streaming. Note: While the architecture is multimodal-ready, image/PDF processing is currently disabled to maintain Groq's high-speed performance.
 
-### 1. Clone the repository
-\`\`\`bash
+🌟 Key Features
+Instant Streaming: Powered by Groq's LPUs for the fastest "typewriter" effect in the industry.
+
+Modular Architecture: Clean separation of concerns (Controllers, Services, Hooks) for professional scalability.
+
+Production-Grade Stability: Implemented AbortController and useRef synchronous locks to prevent race conditions and redundant API calls.
+
+Session Management: LocalStorage-based history tracking with multi-chat support.
+
+🛠️ Tech Stack
+Frontend: React, Vite, TypeScript, Tailwind CSS, Lucide React.
+
+Backend: Node.js, Express, TypeScript, Groq SDK.
+
+Deployment: Vercel (Frontend) & Render (Backend).
+
+📦 Installation & Setup
+1. Clone the repository
+Bash
 git clone https://github.com/aniveshparida/infollion-gemini-chat.git
 cd infollion-gemini-chat
-\`\`\`
+2. Get your Groq API Key
+Go to the Groq Console.
 
-### 2. Backend Setup
-\`\`\`bash
+Create a free account and click "Create API Key".
+
+Copy the key for the next step.
+
+3. Backend Setup
+Bash
 cd backend
 npm install
-\`\`\`
-Create a `.env` file in the `backend` directory and add your Google Gemini API key:
-\`\`\`env
-PORT=3001
-GEMINI_API_KEY=your_api_key_here
-\`\`\`
-Start the development server:
-\`\`\`bash
-npm run dev
-\`\`\`
+Create a .env file in the backend directory:
 
-### 3. Frontend Setup
+Code snippet
+PORT=3001
+GROQ_API_KEY=your_groq_api_key_here
+Start the backend server:
+
+Bash
+npm run dev
+4. Frontend Setup
 Open a new terminal window:
-\`\`\`bash
+
+Bash
 cd frontend
 npm install
 npm run dev
-\`\`\`
+Visit http://localhost:5173 to start chatting!
 
-> **Note:** Before running the frontend, open `frontend/src/api/chatApi.ts` and ensure the `API_URL` constant matches your environment. Use `http://localhost:3001/api` for local development or your Render URL for the deployed version.
-> Note: This app uses the Gemini Free Tier. If you encounter a 429 error, please wait 60 seconds for the rate limit to reset.
+📖 Usage Steps
+Start a Chat: Type any prompt in the message bar. The Llama-3 model will stream the response instantly.
 
-Visit `http://localhost:5173` in your browser to use the application.
+New Chat: Click the "New Chat" button in the sidebar to reset the context.
+
+Switch Conversations: Your previous chat titles are saved in the sidebar for easy switching.
+
+Copy/Resend: Hover over any message to see utility icons for copying text to your clipboard or resending the prompt.
 
 🌐 Live Demo: https://infollion-gemini-chat.vercel.app/
-⚙️ Backend API: https://infollion-gemini-chat2.onrender.com/api
+
+⚙️ Backend API: https://infollion-gemini-chat2.onrender.com
