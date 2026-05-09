@@ -1,9 +1,9 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { parsePdfBuffer, mapHistoryToGeminiFormat } from '../utils/geminiHelper.js';
-// Initialize Gemini
+// Initialize Gemini — using gemini-2.0-flash for higher free-tier rate limits (1500 RPD vs 20 RPD for 2.5-flash)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || ' ');
 const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.0-flash",
     systemInstruction: "You are a helpful conversational AI assistant. Respond conversationally. Do not output raw JSON bounding boxes unless explicitly instructed to detect objects."
 });
 export const handleChatGeneration = async (req, res) => {

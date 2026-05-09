@@ -1,12 +1,18 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { parsePdfBuffer, mapHistoryToGeminiFormat } from '../utils/geminiHelper.js';
 
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || ' ');
-const model = genAI.getGenerativeModel({ 
-    model: "gemini-2.5-flash",
-    systemInstruction: "You are a helpful conversational AI assistant. Respond conversationally. Do not output raw JSON bounding boxes unless explicitly instructed to detect objects."
-});
+// Lazy-init Gemini so the API key is guaranteed to be loaded from env first.
+let _model: any = null;
+const getModel = () => {
+    if (!_model) {
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+        _model = genAI.getGenerativeModel({ 
+            model: "gemini-2.0-flash",
+            systemInstruction: "You are a helpful conversational AI assistant. Respond conversationally. Do not output raw JSON bounding boxes unless explicitly instructed to detect objects."
+        });
+    }
+    return _model;
+};
 
 export const handleChatGeneration = async (req: any, res: any) => {
     try {
@@ -58,7 +64,7 @@ export const handleChatGeneration = async (req: any, res: any) => {
 
         while (attempt <= maxRetries && !success) {
             try {
-                const result = await model.generateContentStream({ contents: history });
+                const result = await getModel().generateContentStream({ contents: history });
                 
                 for await (const chunk of result.stream) {
                     res.write(chunk.text());

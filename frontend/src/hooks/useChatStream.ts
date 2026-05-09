@@ -10,18 +10,25 @@ export const useChatStream = (
   clearInputs: () => void
 ) => {
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
+  
+  // Per-chat abort controllers and processing locks instead of a single global one.
+  // This lets users switch chats and send messages independently.
+  const abortControllersRef = useRef<Record<string, AbortController>>({});
+  const processingChatsRef = useRef<Set<string>>(new Set());
+
+  // Exposed so App.tsx can still guard "create new chat" / "delete chat" for the ACTIVE chat only.
   const isProcessing = useRef(false);
-  const globalAbortControllerRef = useRef<AbortController | null>(null);
 
   const handleStopGenerating = () => {
-    if (globalAbortControllerRef.current) {
-      globalAbortControllerRef.current.abort();
-      globalAbortControllerRef.current = null;
+    if (!activeChatId) return;
+    const controller = abortControllersRef.current[activeChatId];
+    if (controller) {
+      controller.abort();
+      delete abortControllersRef.current[activeChatId];
     }
-    if (activeChatId) {
-      setLoadingStates(prev => ({ ...prev, [activeChatId]: false }));
-    }
-    isProcessing.current = false;
+    setLoadingStates(prev => ({ ...prev, [activeChatId]: false }));
+    processingChatsRef.current.delete(activeChatId);
+    isProcessing.current = processingChatsRef.current.size > 0;
   };
 
   const handleSendMessage = async (
@@ -32,21 +39,24 @@ export const useChatStream = (
   ) => {
     const textToSend = overrideText !== undefined ? overrideText : inputText;
     if (!textToSend.trim() && !selectedDoc && !selectedImage) return;
-    if (!activeChatId || loadingStates[activeChatId]) return;
+    if (!activeChatId) return;
 
-    // Impenetrable lock: useRef is synchronous, completely shutting down double-click loops.
-    if (isProcessing.current) return;
-    isProcessing.current = true;
-
-    // Immediately cancel any previous ongoing request at the browser level
-    if (globalAbortControllerRef.current) {
-      globalAbortControllerRef.current.abort();
-    }
+    // Only block if THIS specific chat is already loading — other chats are free.
+    if (loadingStates[activeChatId] || processingChatsRef.current.has(activeChatId)) return;
 
     const currentChatId = activeChatId;
+    processingChatsRef.current.add(currentChatId);
+    isProcessing.current = true;
+
+    // Abort any stale request for THIS chat only (shouldn't happen, but safety net).
+    if (abortControllersRef.current[currentChatId]) {
+      abortControllersRef.current[currentChatId].abort();
+    }
+
     const currentChat = chats.find(c => c.id === currentChatId);
     if (!currentChat) {
-      isProcessing.current = false;
+      processingChatsRef.current.delete(currentChatId);
+      isProcessing.current = processingChatsRef.current.size > 0;
       return;
     }
 
@@ -74,7 +84,7 @@ export const useChatStream = (
     setLoadingStates(prev => ({ ...prev, [currentChatId]: true }));
 
     const abortController = new AbortController();
-    globalAbortControllerRef.current = abortController;
+    abortControllersRef.current[currentChatId] = abortController;
 
     const botMessageId = crypto.randomUUID();
     const initialBotMessage: Message = {
@@ -105,10 +115,11 @@ export const useChatStream = (
       }
     } finally {
       setLoadingStates(prev => ({ ...prev, [currentChatId]: false }));
-      if (globalAbortControllerRef.current === abortController) {
-        globalAbortControllerRef.current = null;
+      if (abortControllersRef.current[currentChatId] === abortController) {
+        delete abortControllersRef.current[currentChatId];
       }
-      isProcessing.current = false;
+      processingChatsRef.current.delete(currentChatId);
+      isProcessing.current = processingChatsRef.current.size > 0;
     }
   };
 

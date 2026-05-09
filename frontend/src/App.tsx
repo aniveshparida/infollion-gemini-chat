@@ -118,7 +118,6 @@ function App() {
   const isCurrentChatLoading = activeChatId ? loadingStates[activeChatId] || false : false;
 
   const createNewChat = () => {
-    if (isProcessing.current) return;
     const newId = crypto.randomUUID();
     const newChat: ChatSession = {
       id: newId,
@@ -132,7 +131,8 @@ function App() {
 
   const handleDeleteChat = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (isProcessing.current && activeChatId === id) return;
+    // Only block deleting a chat that is currently streaming
+    if (loadingStates[id]) return;
     setChats(prev => prev.filter(c => c.id !== id));
     if (activeChatId === id) {
       const remaining = chats.filter(c => c.id !== id);
