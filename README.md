@@ -46,6 +46,7 @@ npm run dev
 \`\`\`
 
 > **Note:** Before running the frontend, open `frontend/src/api/chatApi.ts` and ensure the `API_URL` constant matches your environment. Use `http://localhost:3001/api` for local development or your Render URL for the deployed version.
+> Note: This app uses the Gemini Free Tier. If you encounter a 429 error, please wait 60 seconds for the rate limit to reset.
 
 Visit `http://localhost:5173` in your browser to use the application.
 
