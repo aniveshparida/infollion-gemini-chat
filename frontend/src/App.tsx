@@ -153,7 +153,7 @@ function App() {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() && !selectedDoc && !selectedImage) return;
-    if (!activeChatId) return;
+    if (!activeChatId || loadingStates[activeChatId]) return;
 
     const currentChatId = activeChatId; // Capture for the closure
     const currentChat = chats.find(c => c.id === currentChatId);
@@ -177,7 +177,7 @@ function App() {
     const messageToSend = inputText;
     const docToSend = selectedDoc;
     const imgToSend = selectedImage;
-    const historyToSend = currentChat.messages; // pass existing messages
+    const historyToSend = currentChat.messages.slice(-10); // Truncate history to save tokens
     
     clearInputs();
     setLoadingStates(prev => ({ ...prev, [currentChatId]: true }));
